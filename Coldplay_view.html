@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Spotify Network Example</title>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+</head>
+
+<style>
+    .links line {
+        stroke: #999;
+        stroke-opacity: 0.6;
+    }
+
+    .nodes circle {
+        stroke: #fff;
+        stroke-width: 1.5px;
+    }
+
+    text {
+        font-family: sans-serif;
+        font-size: 10px;
+    }
+
+    div.tooltip {
+        position: absolute;
+        text-align: center;
+        padding: 2px;
+        font: 12px sans-serif;
+        background: lightsteelblue;
+        border: 0px;
+        border-radius: 8px;
+        pointer-events: none;
+    }
+
+    .chart {
+        border: solid black;
+       margin-left: 10%;
+       margin-right: 10%;
+       margin-top:10px;
+       margin-bottom: 50px; 
+       align-content: center;
+       background-color: rgb(117, 231, 178);
+    }
+    .tittle {
+        text-align: center;
+        color: red;
+    }
+
+   
+
+</style>
+
+<body>
+<div class="tittle">
+    <h1>Análisis de grafos: Coldplay</h1>
+</div>
+<div class="chart"></div>
+    <script>
+        var margin = {top: 10, right: 25, bottom: 35, left: 40 }
+		var width = 900 - margin.left - margin.right;
+        var height = 500 - margin.top - margin.bottom;
+           var svg = d3.select('.chart')
+                        .append('svg')
+                            .attr('width', 800 + margin.left + margin.right)
+                            .attr('height', 470 + margin.top + margin.bottom)
+                            .call(responsivefy)
+                        .append('g')
+                            .attr('transform', `translate(${margin.left}, ${margin.top})`);
+        
+
+                function responsivefy(svg) {
+   
+                    var container = d3.select(svg.node().parentNode),
+                        width = parseInt(svg.style("width")),
+                        height = parseInt(svg.style("height")),
+                        aspect = width / height;
+
+                    svg.attr("viewBox", "0 0 " + width + " " + height)
+                        .attr("preserveAspectRatio", "xMinYMid")
+                        .call(resize);
+
+                    d3.select(window).on("resize." + container.attr("id"), resize);
+
+                    function resize() {
+                        var targetWidth = parseInt(container.style("width"));
+                        svg.attr("width", targetWidth);
+                        svg.attr("height", Math.round(targetWidth / aspect));
+                    }
+                 }
+               
+
+    var pattern_def = svg.append("defs");
+
+    var simulation = d3.forceSimulation()
+        .force("link", d3.forceLink().id(function(d) { return d.id; }))
+        .force("charge", d3.forceManyBody().strength(-10))
+        .force("collide", d3.forceCollide().radius(function (d) {
+            return calculateSize(d)+5
+        }))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+
+    var color = d3.scaleOrdinal(d3.schemeCategory20);
+    var durationScale = d3.scaleLinear().domain([0, 400000]).range([1, 10]);
+    var popScale = d3.scaleLinear().domain([50,100]).range([5,20])
+
+    var div = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+    d3.json("coldplay_proc.json", function(error, graph) {
+        if (error) throw error;
+
+        var idImage=1;
+        var link = svg.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(graph.links)
+            .enter().append("line");
+
+        var node = svg.append("g")
+            .attr("class", "nodes")
+            .selectAll("g")
+            .data(graph.nodes)
+            .enter().append("g")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        node.append("title")
+            .text(function (d) {
+                return "Name: " + d.id + "\n" +
+                    "Followers: " + d.followers + "\n" +
+                    "popularity: " + d.popularity + "/100" + "\n";
+            });
+
+        var circles = node.append("circle")
+            .attr("r", function (d) {
+                return calculateSize(d)
+            })
+            .attr("fill", function (d) {
+                if (d['image']) {
+                    pattern_def.append("pattern")
+                        .attr("id", "image-" + idImage)
+                        .attr("patternContentUnits", "objectBoundingBox")
+                        .attr("width", "100%")
+                        .attr("height", "100%")
+                        .attr("viewBox", "0 0 1 1");
+
+                    d3.select("#" + "image-" + idImage)
+                        .append("image")
+                        .attr("xlink:href", d.image)
+                        .attr("x", 0)
+                        .attr("y", 0)
+                        .attr("width", "1")
+                        .attr("height", "1")
+                        .attr("preserveAspectRatio", "none");
+                    var returnVal = "url(#image-" + idImage + ")";
+                    idImage++;
+                    return returnVal;
+                } else {
+                    return colorForType(d);
+                }
+            })
+            .style("stroke", function (d) {
+                return colorForType(d)
+            })
+            .on("mouseover", function(d) {
+                div.transition()
+                    .duration(200)
+                    .style("opacity", .9);
+                div.html(d['id'])
+                    .style("left", (d3.event.pageX) + "px")
+                    .style("top", (d3.event.pageY - 28) + "px")
+                    .style('background', colorForType(d));
+
+            })
+            .on("mouseout", function(d) {
+                div.transition()
+                    .duration(500)
+                    .style("opacity", 0);
+            })
+            .on("dblclick", function (d) {
+               
+                    window.open(d['image'])
+                
+            });
+
+        var setEvents = node
+            .on( 'mouseenter', function() {
+
+                d3.select( this ).raise().select('circle')
+                    .transition()
+                    .attr("r", 50);
+            })
+
+            .on( 'mouseleave', function() {
+                d3.select( this ).select('circle')
+                    .transition()
+                    .attr("r", function(d) {
+                        return calculateSize(d)
+                    });
+            });
+
+        simulation
+            .nodes(graph.nodes)
+            .on("tick", ticked);
+
+        simulation.force("link")
+            .links(graph.links);
+
+        function ticked() {
+            link
+                .attr("x1", function(d) { return d.source.x; })
+                .attr("y1", function(d) { return d.source.y; })
+                .attr("x2", function(d) { return d.target.x; })
+                .attr("y2", function(d) { return d.target.y; });
+
+            node
+                .attr("transform", function(d) {
+                    return "translate(" + d.x + "," + d.y + ")";
+                })
+        }
+
+
+        function dragstarted(d) {
+            if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(d) {
+            d.fx = d3.event.x;
+            d.fy = d3.event.y;
+        }
+
+        function dragended(d) {
+            if (!d3.event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    });
+
+    function calculateSize(d) {
+        switch (d['type']) {
+            case 'artist': return popScale(d['popularity']);
+            default: return 5;
+        }
+    }
+
+    function colorForType(d) {
+        switch (d["type"]) {
+            case 'artist': return color(0);
+            case 'album': return color(1);
+            default: return color(3);
+        }
+    }
+</script>
+</body>
+</html>
