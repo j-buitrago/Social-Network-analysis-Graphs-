@@ -78,8 +78,8 @@ def add_albums(sp, graph, artists):
 
 if __name__ == '__main__':
 
-    client_id = "f71c807cbb6e477a9f9550acf45227c2"
-    client_secret = "92774a1bc6114a41b8e202374a3aa08f"
+    client_id = "*Your cliente Id*"
+    client_secret = "*Your cliente secret*"
 
     # utilizaremos coldplay como artista 
     artist_id = '4gzpq5DPGxSnKTe4SA8HAU'
